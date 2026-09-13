@@ -1,44 +1,36 @@
-name: jsoncpp native Windows ARM64
+name: Public jsoncpp ARM64 acceptance
 on:
   push:
-    branches: [codex/jsoncpp-arm64-probe]
+    branches: [codex/jsoncpp-public-arm64-probe]
 permissions:
   contents: read
 jobs:
-  probe:
-    if: github.repository == 'ClayWarren/jsoncpp-feedstock'
+  consume:
     runs-on: windows-11-arm
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [win_arm64_]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Build and test jsoncpp
-        shell: cmd
-        env:
-          BUILD_PLATFORM: win-arm64
-          CI: github_actions
-          CONDA_BLD_PATH: C:\bld
-          CONFIG: ${{ matrix.config }}
-          MINIFORGE_HOME: C:\Miniforge
-          PYTHONUNBUFFERED: '1'
-          UPLOAD_PACKAGES: 'False'
-          CONDA_CHANNEL_PRIORITY: strict
-          EXTRA_CB_OPTIONS: '--channel-priority strict'
-          RATTLER_BUILD_COLOR: always
-          RATTLER_BUILD_ENABLE_GITHUB_INTEGRATION: 'true'
+      - name: Install public jsoncpp on native ARM64
+        shell: pwsh
         run: |
-          set "flow_run_id=github_%GITHUB_RUN_ID%"
-          set "remote_url=https://github.com/%GITHUB_REPOSITORY%"
-          set "sha=%GITHUB_SHA%"
-          call ".scripts\run_win_build.bat"
-      - name: Preserve jsoncpp package
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: jsoncpp-arm64-package
-          path: C:\bld\win-arm64\*.conda
-          if-no-files-found: warn
-          retention-days: 7
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://github.com/mamba-org/micromamba-releases/releases/download/1.5.10-0/micromamba-win-64' -OutFile C:\micromamba.exe
+          & C:\micromamba.exe create -y -r C:\mamba -p C:\consumer --platform win-arm64 --override-channels --strict-channel-priority -c conda-forge python=3.14 cmake ninja jsoncpp=1.9.8=h11ae69d_2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & C:\consumer\python.exe recipe\consumer\verify.py metadata
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Compile and run published jsoncpp consumer as ARM64
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do set "VS_PATH=%%i"
+          call "%VS_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64_arm64
+          if errorlevel 1 exit /b 1
+          set "PATH=C:\consumer\Library\bin;C:\consumer;%PATH%"
+          cmake -S recipe\consumer -B consumer-build -G Ninja -DCMAKE_PREFIX_PATH=C:/consumer/Library
+          if errorlevel 1 exit /b 1
+          cmake --build consumer-build
+          if errorlevel 1 exit /b 1
+          C:\consumer\python.exe recipe\consumer\verify.py pe consumer-build\jsoncpp_consumer.exe
+          if errorlevel 1 exit /b 1
+          consumer-build\jsoncpp_consumer.exe
+          if errorlevel 1 exit /b 1
