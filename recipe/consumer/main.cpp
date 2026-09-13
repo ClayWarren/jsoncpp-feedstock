@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 int main() {
+    std::cerr << "MSVC iterator debug level: " << _ITERATOR_DEBUG_LEVEL << std::endl;
     const std::string input = R"({"integer":9007199254740993,"items":[true,null,"line\ntext"],"nested":{"value":-17}})";
     Json::CharReaderBuilder reader_builder;
     std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
